@@ -34,15 +34,25 @@ jobs:
       - name: Gradle を用意する（キャッシュ付き）
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Android SDK のプラットフォームを揃える
+      - name: compileSdk を読む
+        id: sdk
         run: |
-          set -euo pipefail
-          # libs.versions.toml の compileSdk をそのまま使うので、
-          # TOML 側を上げればこのワークフローは直さなくて済む。
-          COMPILE_SDK=$(grep -E '^compileSdk' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
-          echo "compileSdk = $COMPILE_SDK"
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-${COMPILE_SDK}" > /dev/null
+          LEVEL=$(awk -F'"' '/^compileSdk/ {print $2; exit}' gradle/libs.versions.toml)
+          echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
+          echo "compileSdk = $LEVEL"
+
+      - name: ランナーの Android SDK を確認する
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-(未設定)}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-(未設定)}"
+          echo "sdkmanager: $(command -v sdkmanager || echo '見つからない')"
+          echo "--- 既に入っている platforms ---"
+          ls -1 "${ANDROID_HOME:-/usr/local/lib/android/sdk}/platforms" 2>/dev/null || echo "(なし)"
+
+      - name: Android SDK のプラットフォームを揃える
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-${{ steps.sdk.outputs.level }}
 
       - name: 署名用の keystore を復元する
         id: signing
