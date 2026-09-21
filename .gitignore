@@ -1,0 +1,15 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# --- 署名関係: 絶対にコミットしないこと ---
+*.jks
+*.keystore
+keystore.properties
