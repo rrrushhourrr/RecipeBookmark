@@ -57,11 +57,13 @@ class ShareReceiverActivity : ComponentActivity() {
     private fun readImageUris(intent: Intent?): List<Uri> {
         if (intent == null) return emptyList()
         return when (intent.action) {
+            // reified な型引数は明示する。listOfNotNull / orEmpty を挟むと
+            // 期待される型が T まで伝わらず、推論できなくなるため。
             Intent.ACTION_SEND ->
-                listOfNotNull(intent.parcelableExtra(Intent.EXTRA_STREAM))
+                listOfNotNull(intent.parcelableExtra<Uri>(Intent.EXTRA_STREAM))
 
             Intent.ACTION_SEND_MULTIPLE ->
-                intent.parcelableArrayListExtra(Intent.EXTRA_STREAM).orEmpty()
+                intent.parcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
 
             else -> emptyList()
         }
