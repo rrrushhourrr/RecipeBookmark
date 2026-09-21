@@ -1,0 +1,144 @@
+name: APK をビルド
+
+# push するたびに APK を作り、Releases の "latest" に貼り直します。
+# スマホのブラウザから
+#   https://github.com/OWNER/REPO/releases/latest
+# を開けば、いつでも最新の APK を直接ダウンロードできます。
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 17 を用意する
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle を用意する（キャッシュ付き）
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Android SDK のプラットフォームを揃える
+        run: |
+          set -euo pipefail
+          # libs.versions.toml の compileSdk をそのまま使うので、
+          # TOML 側を上げればこのワークフローは直さなくて済む。
+          COMPILE_SDK=$(grep -E '^compileSdk' gradle/libs.versions.toml | head -1 | cut -d'"' -f2)
+          echo "compileSdk = $COMPILE_SDK"
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platforms;android-${COMPILE_SDK}" > /dev/null
+
+      - name: 署名用の keystore を復元する
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > release.jks
+            # 値はここで初めてファイルに落とす。ログには出さない。
+            {
+              echo "storeFile=release.jks"
+              echo "storePassword=${KEYSTORE_PASSWORD}"
+              echo "keyAlias=${KEY_ALIAS}"
+              echo "keyPassword=${KEY_PASSWORD}"
+            } > keystore.properties
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "固定 keystore で署名します。"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::KEYSTORE_BASE64 が未設定なので debug 鍵で署名します。ビルドごとに署名が変わるため、上書き更新ができません（レシピを貯め始める前に keystore を設定してください）。"
+          fi
+
+      - name: ビルド
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: APK に名前をつける
+        id: apk
+        run: |
+          set -euo pipefail
+          SRC=app/build/outputs/apk/release/app-release.apk
+          ls -la app/build/outputs/apk/release/
+          cp "$SRC" recipebookmark.apk
+          echo "size=$(du -h recipebookmark.apk | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: APK を成果物として保存する
+        uses: actions/upload-artifact@v4
+        with:
+          name: recipebookmark-apk
+          path: recipebookmark.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      # Releases に貼ると、スマホから .apk を直接タップしてインストールできる。
+      # Artifact は zip で降ってくるのでスマホだと扱いにくい。
+      - name: Releases の latest を更新する
+        if: github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
+        run: |
+          set -euo pipefail
+          if [ "$SIGNED" = "true" ]; then
+            SIGN_NOTE="固定 keystore で署名済み。上書き更新してもレシピは残ります。"
+          else
+            SIGN_NOTE="⚠️ debug 鍵で署名されています。ビルドごとに署名が変わるので **上書き更新ができません**。レシピを貯め始める前に README の「GitHub だけで署名を用意する」を済ませてください。"
+          fi
+
+          {
+            printf 'ビルド #%s / コミット `%s`\n\n' "${{ github.run_number }}" "${{ github.sha }}"
+            printf '%s\n\n' "$SIGN_NOTE"
+            printf '### 入れかた\n'
+            printf '1. 下の `recipebookmark.apk` をスマホでタップしてダウンロード\n'
+            printf '2. 通知またはファイルアプリから APK をタップ\n'
+            printf '3. 「不明なアプリのインストール」を許可（詳しくは README）\n'
+          } > notes.md
+
+          if gh release view latest > /dev/null 2>&1; then
+            gh release upload latest recipebookmark.apk --clobber
+            gh release edit latest --notes-file notes.md
+          else
+            gh release create latest recipebookmark.apk \
+              --title "最新ビルド" \
+              --notes-file notes.md \
+              --prerelease
+          fi
+
+      - name: まとめを書く
+        if: always()
+        run: |
+          {
+            echo "## APK ビルド #${{ github.run_number }}"
+            echo ""
+            if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+              echo "- 署名: 固定 keystore ✅"
+            else
+              echo "- 署名: debug 鍵 ⚠️（上書き更新できません）"
+            fi
+            echo "- ダウンロード: [Releases の latest](${{ github.server_url }}/${{ github.repository }}/releases/latest)"
+          } >> "$GITHUB_STEP_SUMMARY"

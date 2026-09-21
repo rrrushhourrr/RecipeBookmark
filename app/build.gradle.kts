@@ -30,8 +30,11 @@ android {
         applicationId = "com.recipebookmark"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        // CI からビルド番号を渡せるようにしておく。
+        // versionCode が上がらないと、端末が「同じか古いバージョン」として扱って
+        // 上書きインストールを拒むことがある。
+        versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
+        versionName = System.getenv("VERSION_NAME") ?: "1.0"
         vectorDrawables.useSupportLibrary = true
     }
 

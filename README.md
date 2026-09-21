@@ -10,7 +10,141 @@ Instagram・X・クラシル・料理本の写真・Gemini の提案レシピな
 
 ---
 
-## 1. ビルド
+## 1. APK の入手（GitHub だけで完結します）
+
+**PC も Android Studio も要りません。** GitHub Actions がビルドして、
+Releases に APK を貼ります。スマホのブラウザから直接ダウンロードできます。
+
+### いちばん簡単な流れ
+
+このリンクをスマホでブックマークしておいてください。常に最新の APK があります。
+
+```
+https://github.com/rrrushhourrr/RecipeBookmark/releases/latest
+```
+
+1. 上のリンクを開く
+2. 「Assets」の中の **`recipebookmark.apk`** をタップしてダウンロード
+3. あとは「3. 実機へのインストール」へ
+
+APK は `main`（既定ブランチ）に push されるたびに自動で作り直されます。
+手動で作りたいときは **Actions タブ → 「APK をビルド」→ Run workflow**。
+
+### ビルドの状態を見る
+
+Actions タブに実行履歴が出ます。失敗していたら、赤い実行を開くと
+どのステップで落ちたかが読めます。
+
+---
+
+## 2. GitHub だけで署名を用意する（最初に 1 回だけ）
+
+**レシピを貯め始める前に、必ずこれをやってください。**
+
+Android はアプリを「署名」で見分けます。署名が変わると別のアプリとみなされ、
+上書き更新ができなくなります（＝入れ直しになり、保存したレシピが消えます）。
+署名用の鍵（keystore）を固定しておけば、何度更新してもレシピは残ります。
+
+> Secret を設定しないままでも APK はできます。ただし debug 鍵で署名されるので、
+> **ビルドごとに署名が変わり上書き更新できません。** お試し用と考えてください。
+
+### 2-1. まずリポジトリを private にする
+
+秘密鍵を扱うので、public のままでは危険です（public だと Actions の成果物を
+誰でもダウンロードできてしまいます）。
+
+**Settings → General → 最下部の Danger Zone → Change repository visibility → Make private**
+
+個人用のレシピアプリなので private で困ることはありません。
+private でない場合、次の手順は安全のため自動で止まります。
+
+### 2-2. keystore を作る
+
+1. **Actions タブ → 「署名用の keystore を作る（手動・1回だけ）」**
+2. 右の **Run workflow** を押す
+3. 確認欄に `はい` と入力して実行
+
+パスワードは自動生成されます（入力欄に打つと実行履歴に残ってしまうため）。
+
+### 2-3. Secret を 4 つ登録する
+
+1. 実行が終わったら、そのページの下にある成果物
+   **`signing-keystore-SECRET-DELETE-AFTER-USE`** をダウンロード（zip）
+2. 中の **`READ-ME-FIRST.txt`** を開く。登録すべき 4 つの値が書いてあります
+3. **Settings → Secrets and variables → Actions → New repository secret** で登録
+
+| Secret 名 | 中身 |
+|---|---|
+| `KEYSTORE_BASE64` | `KEYSTORE_BASE64.txt` の中身を全部（改行なしの長い 1 行） |
+| `KEYSTORE_PASSWORD` | `READ-ME-FIRST.txt` に書かれたパスワード |
+| `KEY_ALIAS` | `recipebookmark` |
+| `KEY_PASSWORD` | `KEYSTORE_PASSWORD` と同じ値 |
+
+### 2-4. 鍵を控えて、成果物を消す
+
+**これが一番大事です。** zip の中の `release.jks` と 4 つの値を、
+パスワードマネージャ（1Password / Bitwarden など）に保存してください。
+`release.jks` をファイルとして添付し、パスワードも同じ項目に書いておくのが確実です。
+
+控えたら、成果物を削除します（Actions → その実行 → 右上の `…` → Delete artifact）。
+成果物は 1 日で自動的に消えますが、手で消しておくほうが安全です。
+
+> **鍵を失うと二度と上書き更新できません。** GitHub の Secret は登録後は
+> 中身を読み出せないので、Secret に入れただけでは控えたことになりません。
+
+### 2-5. 署名済み APK を作る
+
+**Actions → 「APK をビルド」→ Run workflow**
+
+まとめ欄に「署名: 固定 keystore ✅」と出れば成功です。
+以降はこの APK を上書きインストールしてもレシピは消えません。
+
+---
+
+## 3. 実機へのインストール
+
+### 方法 A: スマホだけで完結（おすすめ）
+
+1. スマホの Chrome で Releases を開く
+   → `https://github.com/rrrushhourrr/RecipeBookmark/releases/latest`
+2. Assets の **`recipebookmark.apk`** をタップしてダウンロード
+   （「ファイルの種類が原因で端末を破損する可能性があります」と出たら「OK」）
+3. 通知、またはファイルアプリの「ダウンロード」から APK をタップ
+4. **「不明なアプリのインストール」の許可**を求められるので、こう進みます
+   - 出てきた「設定」ボタンをタップ
+   - （手で辿る場合）設定 → アプリ → 特別なアプリアクセス → 不明なアプリのインストール
+   - **APK を開いたアプリ**（Chrome、Files など）を選ぶ
+   - 「この提供元のアプリを許可」をオンにする
+5. 戻ってもう一度 APK をタップ → インストール
+
+Play Protect の警告（「このアプリの開発元は不明です」）が出たら
+「詳細 → 無視してインストール」で進めます。自分でビルドした APK なので問題ありません。
+
+インストールが終わったら、手順 4 の許可はオフに戻しておくと安心です。
+
+### 更新するとき
+
+同じ手順で新しい APK をタップするだけです。
+**「2. GitHub だけで署名を用意する」を済ませてあれば、レシピは消えません。**
+
+### 方法 B: PC から USB で入れる
+
+1. 「設定 → デバイス情報 → ビルド番号」を 7 回タップして開発者オプションを出す
+2. 「設定 → システム → 開発者向けオプション → USB デバッグ」をオン
+3. PC と USB でつなぎ、端末に出る「USB デバッグを許可しますか？」で許可
+4. インストール
+
+```bash
+adb install -r recipebookmark.apk
+```
+
+`-r` は上書き（再インストール）です。署名が同じならレシピは残ります。
+
+---
+
+## 4. 手元の PC でビルドする場合（任意）
+
+GitHub Actions で完結するので普段は不要ですが、ローカルでも同じものが作れます。
 
 ### 必要なもの
 
@@ -64,15 +198,9 @@ minSdk     = "31"
 この数値を上げるだけです（併せて `agp` のバージョンも上げる必要がある場合があります）。
 minSdk 31 なので Android 12 以降の端末で動きます。
 
----
+### リリース署名（ローカル）
 
-## 2. リリース署名（keystore）
-
-**更新時にアプリのデータが消えないように、リリース版は必ず同じ keystore で署名してください。**
-署名が変わると Android は「別のアプリ」とみなし、上書きインストールができなくなります
-（＝レシピが全部消えます）。
-
-### 2-1. keystore を作る（最初の 1 回だけ）
+#### 4-1. keystore を作る
 
 ```bash
 keytool -genkeypair -v \
@@ -86,7 +214,7 @@ keytool -genkeypair -v \
 対話で聞かれるパスワードと名前を入力します（有効期限は 30 年にしてあります）。
 できあがった `recipebookmark-release.jks` はリポジトリのルートに置きます。
 
-### 2-2. keystore.properties を用意する
+#### 4-2. keystore.properties を用意する
 
 同梱の `keystore.properties.sample` をコピーして値を埋めます。
 
@@ -96,16 +224,16 @@ cp keystore.properties.sample keystore.properties
 
 ```properties
 storeFile=recipebookmark-release.jks
-storePassword=（2-1 で決めたストアのパスワード）
+storePassword=（4-1 で決めたストアのパスワード）
 keyAlias=recipebookmark
-keyPassword=（2-1 で決めた鍵のパスワード）
+keyPassword=（4-1 で決めた鍵のパスワード）
 ```
 
 これで `./gradlew assembleRelease` が固定 keystore で署名します。
 `keystore.properties` が無い場合もビルドは通りますが、そのときは debug 鍵で署名されます
-（お試し用。継続して使うなら必ず 2-1 をやってください）。
+（お試し用。継続して使うなら必ず 4-1 をやってください）。
 
-### 2-3. keystore のバックアップ（重要）
+#### 4-3. keystore のバックアップ（重要）
 
 `*.jks` と `keystore.properties` は `.gitignore` 済みで、**リポジトリには入りません**。
 これは正しい状態ですが、裏を返すと *この 2 つを失うと二度とアプリを更新できません*。
@@ -125,40 +253,7 @@ zip -e recipebookmark-signing-backup.zip recipebookmark-release.jks keystore.pro
 
 ---
 
-## 3. 実機へのインストール
-
-### 方法 A: USB ケーブル（おすすめ）
-
-1. 端末の「設定 → デバイス情報 → ビルド番号」を 7 回タップして開発者オプションを出す
-2. 「設定 → システム → 開発者向けオプション → USB デバッグ」をオン
-3. PC と USB でつないで、端末に出る「USB デバッグを許可しますか？」で許可
-4. インストール
-
-```bash
-adb install -r app/build/outputs/apk/release/app-release.apk
-```
-
-`-r` は再インストール（上書き）です。署名が同じならレシピは消えません。
-
-### 方法 B: APK ファイルを直接渡す
-
-1. APK を端末にコピーする（USB、Google ドライブ、自分あてのメールなど）
-2. 端末のファイルアプリで APK をタップする
-3. **「不明なアプリのインストール」の許可を求められる**ので、次のように進みます
-   - 「設定」ボタンが出たらタップ
-   - 「設定 → アプリ → 特別なアプリアクセス → 不明なアプリのインストール」
-   - **APK を開いたアプリ**（Files、Chrome、Gmail など）を選ぶ
-   - 「この提供元のアプリを許可」をオンにする
-4. 戻ってもう一度 APK をタップするとインストールできます
-
-Play Protect の警告（「このアプリの開発元は不明です」）が出た場合は
-「詳細 → 無視してインストール」で進められます。自分でビルドした APK なので問題ありません。
-
-セキュリティのため、インストールが終わったら手順 3 の許可はオフに戻しておくと安心です。
-
----
-
-## 4. 使い方
+## 5. 使い方
 
 ### 登録する
 
@@ -216,7 +311,7 @@ Instagram / X / クラシル / Gemini などで「共有」→「レシピブッ
 
 ---
 
-## 5. 構成
+## 6. 構成
 
 ```
 app/src/main/java/com/recipebookmark/
