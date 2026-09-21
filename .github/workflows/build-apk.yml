@@ -84,9 +84,40 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: 1.0.${{ github.run_number }}
         run: |
-          set -euo pipefail
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+
+          # --stacktrace は付けない。Gradle の内部スタックが数百行流れて
+          # 肝心の "e:" 行がログの後ろに埋もれてしまうため。
+          if ./gradlew assembleRelease --no-daemon 2>&1 | tee build.log; then
+            echo "ビルド成功"
+            exit 0
+          fi
+
+          # 失敗したら、原因だけを最後にもう一度出す。
+          # ログ末尾に置くことで、API でログを取ったときにちゃんと読める。
+          {
+            echo "## ❌ ビルド失敗"
+            echo ""
+            echo '```'
+            grep -E '^e: ' build.log \
+              | sed 's|file://'"$PWD"'/||' \
+              | head -60 || true
+            echo '```'
+            echo ""
+            echo "### Gradle のメッセージ"
+            echo '```'
+            sed -n '/^FAILURE:/,/^\* Try:/p' build.log | head -40 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo ""
+          echo "=================== コンパイルエラー ==================="
+          grep -E '^e: ' build.log | sed 's|file://'"$PWD"'/||' | head -60 || true
+          echo "=================== Gradle の指摘 ====================="
+          sed -n '/^FAILURE:/,/^\* Try:/p' build.log | head -40 || true
+          echo "======================================================="
+          exit 1
 
       - name: APK に名前をつける
         id: apk
