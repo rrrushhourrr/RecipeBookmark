@@ -60,9 +60,12 @@ private でない場合、次の手順は安全のため自動で止まります
 
 ### 2-2. keystore を作る
 
-1. **Actions タブ → 「署名用の keystore を作る（手動・1回だけ）」**
-2. 右の **Run workflow** を押す
-3. 確認欄に `はい` と入力して実行
+1. このリンクを開く
+   → `https://github.com/rrrushhourrr/RecipeBookmark/actions/workflows/create-keystore.yml`
+2. 右側の灰色の **`Run workflow`** ボタンを押す
+3. 小さなパネルが開くので、緑の **`Run workflow`** ボタンをもう一度押す
+   （ブランチ欄はそのままでOK）
+4. 数秒待ってページを再読み込みすると、実行結果が一覧に出ます
 
 パスワードは自動生成されます（入力欄に打つと実行履歴に残ってしまうため）。
 
